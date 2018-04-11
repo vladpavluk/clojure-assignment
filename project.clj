@@ -6,6 +6,9 @@
                        "-Xmx256m"
                        "-XX:-OmitStackTraceInFastThrow"]
   :dependencies [[org.clojure/clojure "1.8.0"]
+                 [clj-oauth "1.5.5"]
+                 [clj-http "3.8.0"]
+                 [environ "1.1.0"]
                  [aleph "0.4.4"]
                  [org.clojure/tools.cli "0.3.5"]]
   :main ^:skip-aot goodreads.core
