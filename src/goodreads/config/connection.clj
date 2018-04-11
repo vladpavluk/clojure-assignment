@@ -6,28 +6,32 @@
             [manifold.deferred :as d]))
 
 (def ^:private gr-creds
-  {:key (env :gr-key)
+  {:key    (env :gr-key)
    :secret (env :gr-secret)})
 
-(def ^:private gr-creds
-  {:key "*******"
-   :secret "*******"})
-
-(def consumer (oauth/make-consumer (:key gr-creds)
-                                   (:secret gr-creds)
-                                   "https://www.goodreads.com/oauth/request_token"
-                                   "https://www.goodreads.com/oauth/access_token"
-                                   "https://www.goodreads.com/oauth/authorize"
-                                   :hmac-sha1))
+(def consumer
+  (oauth/make-consumer
+    (:key gr-creds)
+    (:secret gr-creds)
+    "https://www.goodreads.com/oauth/request_token"
+    "https://www.goodreads.com/oauth/access_token"
+    "https://www.goodreads.com/oauth/authorize"
+    :hmac-sha1))
 
 (def request-token (oauth/request-token consumer))
 
-(def credentials (oauth/credentials consumer
-                                    (:oauth_token request-token)
-                                    (:oauth_token_secret request-token)
-                                    :GET
-                                    "https://www.goodreads.com/owned_books/user?format=xml&id=80237278"
-                                    {}))
+(def access-token-response
+  (oauth/access-token consumer request-token))
 
-(http/get "https://www.goodreads.com/owned_books/user?format=xml&id=80237278"
-           {:query-params credentials})
+(def credentials
+  (oauth/credentials
+    consumer
+    (:oauth_token access-token-response)
+    (:oauth_token_secret access-token-response)
+    :GET
+    "https://www.goodreads.com/api/auth_user"
+    {}))
+
+(http/get "https://www.goodreads.com/api/auth_user"
+           {:headers
+            {"Authorization" (oauth/authorization-header credentials)}})
