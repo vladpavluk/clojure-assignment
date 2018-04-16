@@ -2,14 +2,22 @@
   (:require [clojure.tools.cli :as cli]
             [environ.core :refer [env]]
             [oauth.client :as oauth]
+            [clojure.data.xml :refer :all]
+            [clojure.zip :as z]
+            [clojure.data.zip.xml :as xz]
             [clj-http.client :as http]
             [manifold.deferred :as d]))
 
-(def ^:private gr-creds
+(defn p [res]
+  (-> res :body java.io.StringReader.
+      parse
+      z/xml-zip))
+
+#_(def ^:private gr-creds
   {:key    (env :gr-key)
    :secret (env :gr-secret)})
 
-(def consumer
+(defonce consumer
   (oauth/make-consumer
     (:key gr-creds)
     (:secret gr-creds)
@@ -20,18 +28,38 @@
 
 (def request-token (oauth/request-token consumer))
 
+(prn (oauth/user-approval-uri consumer (:oauth_token request-token)))
+
 (def access-token-response
   (oauth/access-token consumer request-token))
 
-(def credentials
-  (oauth/credentials
-    consumer
-    (:oauth_token access-token-response)
-    (:oauth_token_secret access-token-response)
-    :GET
-    "https://www.goodreads.com/api/auth_user"
-    {}))
+(def res
+  (http/get "https://www.goodreads.com/api/auth_user"
+            {:headers
+             {"Authorization"
+              (oauth/authorization-header
+                (oauth/credentials
+                  consumer
+                  (:oauth_token access-token-response)
+                  (:oauth_token_secret access-token-response)
+                  :GET
+                  "https://www.goodreads.com/api/auth_user"
+                  {}))}}))
 
-(http/get "https://www.goodreads.com/api/auth_user"
-           {:headers
-            {"Authorization" (oauth/authorization-header credentials)}})
+(def uid
+  (xml1-> (p res)
+          :user
+          (attr :id)))
+
+(def shelves
+  (http/get "https://www.goodreads.com/shelf/list.xml?key=paZ3A3dqrc9JDwyfSsTDQ"
+            {:headers
+             {"Authorization"
+              (oauth/authorization-header
+                (oauth/credentials
+                  consumer
+                  (:oauth_token access-token-response)
+                  (:oauth_token_secret access-token-response)
+                  :GET
+                  "https://www.goodreads.com/shelf/list.xml?key=paZ3A3dqrc9JDwyfSsTDQ"
+                  {:key "paZ3A3dqrc9JDwyfSsTDQ"}))}}))
