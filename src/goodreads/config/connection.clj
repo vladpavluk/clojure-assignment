@@ -1,65 +1,64 @@
 (ns goodreads.config.connection
-  (:require [clojure.tools.cli :as cli]
-            [environ.core :refer [env]]
-            [oauth.client :as oauth]
+  (:require [environ.core :refer [env]]
             [clojure.data.xml :refer :all]
             [clojure.zip :as z]
             [clojure.data.zip.xml :as xz]
             [clj-http.client :as http]
-            [manifold.deferred :as d]))
+            [manifold.deferred :as d]
+            [clojure.string :as str]))
 
 (defn p [res]
-  (-> res :body java.io.StringReader.
+  (-> res :body
+      java.io.StringReader.
       parse
       z/xml-zip))
 
-#_(def ^:private gr-creds
-  {:key    (env :gr-key)
-   :secret (env :gr-secret)})
+(def dkey "paZ3A3dqrc9JDwyfSsTDQ")
 
-(defonce consumer
-  (oauth/make-consumer
-    (:key gr-creds)
-    (:secret gr-creds)
-    "https://www.goodreads.com/oauth/request_token"
-    "https://www.goodreads.com/oauth/access_token"
-    "https://www.goodreads.com/oauth/authorize"
-    :hmac-sha1))
+(def list-books-by-shelf
+  (memoize
+    (fn [shelf-name]
+      (xz/xml->
+        (-> (http/get
+              "https://www.goodreads.com/review/list/80237278.xml"
+              {:query-params {:v 2 :key dkey
+                              :shelf shelf-name}})
+            p)
+        :reviews
+        :review
+        :book
+        :id
+        xz/text))))
 
-(def request-token (oauth/request-token consumer))
+(defn map-book-id-to-book [book-loc]
+  {(xz/xml1-> book-loc :id xz/text)
+   {:rating  (xz/xml1-> book-loc :average_rating xz/text)
+    :title   (xz/xml1-> book-loc :title xz/text)
+    :link (xz/xml1-> book-loc :link xz/text)
+    :authors (vec (xz/xml-> book-loc :authors :author :name
+                            (fn [n] {:name (xz/xml1-> n :name xz/text)})))}})
 
-(prn (oauth/user-approval-uri consumer (:oauth_token request-token)))
+(def find-similar-books
+  (memoize
+    (fn [book-id]
+      (reduce merge
+              (xz/xml->
+                (-> (http/get
+                      (str "https://www.goodreads.com/book/show/" book-id ".xml")
+                      {:query-params {:key dkey}})
+                    p)
+                :book
+                :similar_books
+                :book
+                map-book-id-to-book)))))
 
-(def access-token-response
-  (oauth/access-token consumer request-token))
-
-(def res
-  (http/get "https://www.goodreads.com/api/auth_user"
-            {:headers
-             {"Authorization"
-              (oauth/authorization-header
-                (oauth/credentials
-                  consumer
-                  (:oauth_token access-token-response)
-                  (:oauth_token_secret access-token-response)
-                  :GET
-                  "https://www.goodreads.com/api/auth_user"
-                  {}))}}))
-
-(def uid
-  (xml1-> (p res)
-          :user
-          (attr :id)))
-
-(def shelves
-  (http/get "https://www.goodreads.com/shelf/list.xml?key=paZ3A3dqrc9JDwyfSsTDQ"
-            {:headers
-             {"Authorization"
-              (oauth/authorization-header
-                (oauth/credentials
-                  consumer
-                  (:oauth_token access-token-response)
-                  (:oauth_token_secret access-token-response)
-                  :GET
-                  "https://www.goodreads.com/shelf/list.xml?key=paZ3A3dqrc9JDwyfSsTDQ"
-                  {:key "paZ3A3dqrc9JDwyfSsTDQ"}))}}))
+(defn build-recommendations []
+  (let [read-books (list-books-by-shelf "read")]
+    (->> read-books
+         (map find-similar-books)
+         (reduce merge)
+         (remove (fn [[id _]]
+                   (some #{id} (list-books-by-shelf "currently-reading"))))
+         (sort-by (complement #(:rating (second %))))
+         (take 10)
+         (map (comp #(dissoc % :rating) second)))))
