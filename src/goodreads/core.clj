@@ -1,22 +1,14 @@
 (ns goodreads.core
+  (:use [goodreads.config.connection])
   (:gen-class)
   (:require [clojure.tools.cli :as cli]
             [manifold.deferred :as d]))
 
-;; TODO: this implementation is pretty useless :(
-(defn build-recommentations [_]
-  (d/success-deferred
-   [{:title "My Side of the Mountain (Mountain, #1)"
-     :authors [{:name "Jean Craighead George"}]
-     :link "https://www.goodreads.com/book/show/41667.My_Side_of_the_Mountain"}
-    {:title "Incident at Hawk's Hill"
-     :authors [{:name "Allan W. Eckert"}]
-     :link "https://www.goodreads.com/book/show/438131.Incident_at_Hawk_s_Hill"}
-    {:title "The Black Pearl"
-     :authors [{:name "Scott O'Dell"}]
-     :link "https://www.goodreads.com/book/show/124245.The_Black_Pearl"}]))
-
-(def cli-options [["-t"
+(def cli-options [["-u"
+                   "--user-id"
+                   "Target User ID"
+                   :default 5000]
+                  ["-t"
                    "--timeout-ms"
                    "Wait before finished"
                    :default 5000
@@ -42,8 +34,10 @@
       (contains? options :help) (do (println summary) (System/exit 0))
       (some? errors) (do (println errors) (System/exit 1))
       (empty? args) (do (println "Please, specify user's token") (System/exit 1))      
-      :else (let [config {:token (first args)}
-                  books (-> (build-recommentations config)
+      :else (let [token {:token (first args)}
+                  user-id (:user-id options)
+                  number-books (:number-books options)
+                  books (-> (build-recommendations token user-id number-books)
                             (d/timeout! (:timeout-ms options) ::timeout)
                             deref)]
               (cond
@@ -53,3 +47,5 @@
                         (println (str "#" (inc i)))
                         (println (book->str book))
                         (println)))))))
+
+;(build-recommendations "paZ3A3dqrc9JDwyfSsTDQ" "80237244")
