@@ -1,4 +1,4 @@
-(ns goodreads.config.utils
+(ns goodreads.config.interceptors
   (:require [environ.core :refer [env]]
             [clojure.data.xml :refer :all]
             [clojure.zip :as z]

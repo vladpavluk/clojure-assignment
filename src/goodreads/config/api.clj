@@ -1,5 +1,5 @@
 (ns goodreads.config.api
-  (:use [goodreads.config.utils]
+  (:use [goodreads.config.interceptors]
         [goodreads.config.auth])
   (:require [environ.core :refer [env]]
             [clojure.data.xml :refer :all]
@@ -24,6 +24,8 @@
    (goodreads:get url {})))
 
 (def api:list-books-by-shelf
+  "Being passed a user-id and a shelf name, returns a list of
+  books for provided user and shelf"
   (memoize
     (fn [user-id shelf-name]
       (xz/xml->
@@ -37,6 +39,7 @@
         xz/text))))
 
 (def api:find-similar-books
+  "Given a book id, finds a list of all similar books"
   (memoize
     (fn [book-id]
       (reduce

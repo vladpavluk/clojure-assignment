@@ -1,20 +1,20 @@
 (ns goodreads.core
-  (:use [goodreads.config.connection])
+  (:use [goodreads.config.recommendations_builder])
   (:gen-class)
   (:require [clojure.tools.cli :as cli]
             [manifold.deferred :as d]))
 
 (def cli-options [["-u"
-                   "--user-id"
+                   "--user-id USERID"
                    "Target User ID"
                    :default 5000]
                   ["-t"
-                   "--timeout-ms"
+                   "--timeout-ms TIMEOUT"
                    "Wait before finished"
                    :default 5000
                    :parse-fn #(Integer/parseInt %)]
                   ["-n"
-                   "--number-books"
+                   "--number-books NUMBERBOOKS"
                    "How many books do you want to recommend"
                    :default 10
                    :parse-fn #(Integer/parseInt %)]
@@ -34,10 +34,10 @@
       (contains? options :help) (do (println summary) (System/exit 0))
       (some? errors) (do (println errors) (System/exit 1))
       (empty? args) (do (println "Please, specify user's token") (System/exit 1))      
-      :else (let [token {:token (first args)}
+      :else (let [token (first args)
                   user-id (:user-id options)
                   number-books (:number-books options)
-                  books (-> (build-recommendations token user-id number-books)
+                  books (-> (build-recommendations (merge options {:token token}))
                             (d/timeout! (:timeout-ms options) ::timeout)
                             deref)]
               (cond
@@ -47,5 +47,3 @@
                         (println (str "#" (inc i)))
                         (println (book->str book))
                         (println)))))))
-
-;(build-recommendations "paZ3A3dqrc9JDwyfSsTDQ" "80237244")
